@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Generator</title>
+    <style>
+        :root {
+            --bg-color: #09090b;
+            --card-color: #18181b;
+            --border-color: #27272a;
+            --accent-color: #8b5cf6; /* Ungu Modern */
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; padding: 40px 20px;
+        }
+
+        .main-container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 24px; }
+
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; background: linear-gradient(to right, #fff, #a5b4fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header p { color: var(--text-muted); font-size: 0.95rem; }
+
+        .input-wrapper {
+            background: var(--card-color); border: 1px solid var(--border-color);
+            padding: 8px; border-radius: 12px; display: flex; gap: 10px;
+            transition: border-color 0.2s;
+        }
+        .input-wrapper:focus-within { border-color: var(--accent-color); }
+
+        input { flex: 1; background: transparent; border: none; color: var(--text-main); padding: 12px 16px; font-size: 1rem; outline: none; }
+
+        button.btn-generate {
+            background-color: var(--accent-color); color: white; border: none;
+            padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; transition: 0.2s;
+        }
+        button.btn-generate:hover { opacity: 0.9; }
+        button.btn-generate:disabled { background-color: var(--border-color); color: var(--text-muted); cursor: not-allowed; }
+
+        .progress-container {
+            display: none; background: var(--card-color); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 20px; text-align: center;
+        }
+        .progress-labels { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.9rem; color: var(--text-muted); }
+        .progress-bar-bg { width: 100%; height: 6px; background-color: var(--border-color); border-radius: 4px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; width: 0%; background-color: var(--accent-color); transition: width 0.4s ease-out; border-radius: 4px; }
+
+        .gallery { display: grid; grid-template-columns: 1fr; gap: 16px; width: 100%; }
+        .image-card {
+            background: var(--card-color); border: 1px solid var(--border-color);
+            border-radius: 12px; overflow: hidden; position: relative; animation: fadeIn 0.5s ease;
+        }
+        .image-card img { width: 100%; height: auto; display: block; }
+
+        .image-actions {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: rgba(0,0,0,0.8); padding: 12px; display: flex; justify-content: center;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .image-card:hover .image-actions { opacity: 1; }
+
+        .btn-download {
+            background: white; color: black; border: none; padding: 8px 16px;
+            border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+            text-decoration: none; display: flex; align-items: center; gap: 6px;
+        }
+        .btn-download:hover { background: #e4e4e7; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        svg { width: 18px; height: 18px; }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="header">
+            <h1>Vider AI Generator</h1>
+            <p>Create stunning AI art effortlessly.</p>
+        </div>
+
+        <div class="input-wrapper">
+            <input type="text" id="promptInput" placeholder="A futuristic city in the clouds..." autocomplete="off">
+            <button class="btn-generate" id="generateBtn" onclick="startGeneration()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                Generate
+            </button>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-labels">
+                <span id="statusText">Starting...</span>
+                <span id="percentageText">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div class="gallery" id="gallery"></div>
+    </div>
+
+    <script>
+        let progressInterval;
+        let currentProgress = 0;
+
+        function updateProgress(value, text) {
+            const bar = document.getElementById('progressBar');
+            const pct = document.getElementById('percentageText');
+            const status = document.getElementById('statusText');
+            currentProgress = value;
+            bar.style.width = value + '%';
+            pct.innerText = Math.floor(value) + '%';
+            if(text) status.innerText = text;
+        }
+
+        // Simulasi Loading yang lebih lambat karena Vider AI butuh waktu
+        function startSimulatedProgress() {
+            currentProgress = 0;
+            updateProgress(0, "Connecting...");
+            clearInterval(progressInterval);
+            
+            progressInterval = setInterval(() => {
+                // Jalan pelan sampai 90% dalam waktu sekitar 40-50 detik
+                if (currentProgress < 50) {
+                    currentProgress += 1; 
+                } else if (currentProgress < 80) {
+                    currentProgress += 0.5; 
+                    updateProgress(currentProgress, "Drawing details...");
+                } else if (currentProgress < 95) {
+                    currentProgress += 0.2; 
+                    updateProgress(currentProgress, "Finalizing...");
+                }
+                updateProgress(currentProgress);
+            }, 500);
+        }
+
+        async function startGeneration() {
+            const prompt = document.getElementById('promptInput').value;
+            const btn = document.getElementById('generateBtn');
+            const gallery = document.getElementById('gallery');
+            const progressContainer = document.getElementById('progressContainer');
+
+            if (!prompt) return;
+
+            btn.disabled = true;
+            gallery.innerHTML = "";
+            progressContainer.style.display = "block";
+            startSimulatedProgress();
+
+            try {
+                // 1. Request Task ID
+                const startRes = await fetch('/api/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const startData = await startRes.json();
+
+                if (!startData.success) throw new Error(startData.error);
+
+                const { taskId } = startData;
+
+                // 2. Polling Status setiap 5 detik
+                let attempts = 0;
+                const poll = setInterval(async () => {
+                    attempts++;
+                    try {
+                        const checkRes = await fetch('/api/check', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ taskId })
+                        });
+                        const checkData = await checkRes.json();
+
+                        if (checkData.state === 'completed') {
+                            clearInterval(poll);
+                            clearInterval(progressInterval);
+                            updateProgress(100, "Done!");
+                            
+                            setTimeout(() => {
+                                renderImages(checkData.images);
+                                btn.disabled = false;
+                                progressContainer.style.display = "none";
+                            }, 500);
+                        } 
+                        
+                        // Stop jika lebih dari 2 menit (24 x 5 detik)
+                        if (attempts > 24) throw new Error("Timeout: Server took too long.");
+
+                    } catch (e) {
+                        clearInterval(poll);
+                        clearInterval(progressInterval);
+                        alert("Error: " + e.message);
+                        btn.disabled = false;
+                        progressContainer.style.display = "none";
+                    }
+                }, 5000); // Cek setiap 5 detik
+
+            } catch (err) {
+                clearInterval(progressInterval);
+                alert("Connection Error");
+                btn.disabled = false;
+                progressContainer.style.display = "none";
+            }
+        }
+
+        function renderImages(images) {
+            const gallery = document.getElementById('gallery');
+            images.forEach(url => {
+                const card = document.createElement('div');
+                card.className = 'image-card';
+                card.innerHTML = `
+                    <img src="${url}" alt="AI Result" loading="lazy">
+                    <div class="image-actions">
+                        <a href="${url}" target="_blank" class="btn-download">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            Download
+                        </a>
+                    </div>
+                `;
+                gallery.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
