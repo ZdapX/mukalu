@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Agent untuk menyamar jadi browser & koneksi stabil
+// Setup Agent HTTPS
 const agent = new https.Agent({
   keepAlive: true,
   maxSockets: 100,
@@ -18,7 +18,7 @@ const agent = new https.Agent({
   rejectUnauthorized: false
 });
 
-// Headers persis seperti script aslimu + referer
+// Header Sama Persis dengan Script Asli
 const HEADERS = {
   "user-agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36",
   "content-type": "application/json",
@@ -28,18 +28,20 @@ const HEADERS = {
 };
 
 async function createTask(prompt) {
-  // PERBAIKAN: Menggunakan struktur 'params' di dalam body
+  // PERBAIKAN DI SINI:
+  // aspectRatio harus integer 1, bukan string "1:1"
   const payload = {
     params: {
       model: "free-ai-image-generator",
       image: "",
-      aspectRatio: "1:1", // String biasanya lebih aman
+      aspectRatio: 1, // KEMBALI KE INTEGER
       prompt: prompt
     }
   };
 
   try {
-    console.log("[1] Mengirim prompt ke Vider...");
+    console.log("[1] Sending payload:", JSON.stringify(payload));
+    
     const { data } = await axios.post(
       'https://api.vider.ai/api/freev1/task_create/free-ai-image-generator',
       payload,
@@ -49,22 +51,22 @@ async function createTask(prompt) {
       }
     );
     
-    // Debug response
-    console.log("[2] Respon Vider:", JSON.stringify(data));
+    console.log("[2] Response:", JSON.stringify(data));
 
-    if (data && data.data && data.data.taskId) {
+    // Validasi Task ID
+    if (data?.data?.taskId) {
       return data.data.taskId;
     } else {
-      console.error("Gagal dapat Task ID. Response structure:", data);
+      // Jika error server side Vider
+      console.error("Vider Error Debug:", data.debug); 
       return null;
     }
 
   } catch (err) {
     if (err.response) {
-      // Log detail jika Vider menolak (403/500/400)
-      console.error("[ERROR Vider Response]:", err.response.status, JSON.stringify(err.response.data));
+      console.error("[Network Error]:", err.response.status, JSON.stringify(err.response.data));
     } else {
-      console.error("[ERROR Network]:", err.message);
+      console.error("[System Error]:", err.message);
     }
     return null;
   }
@@ -74,10 +76,7 @@ async function checkTask(id) {
   try {
     const { data: response } = await axios.get(
       `https://api.vider.ai/api/freev1/task_get/${id}`,
-      { 
-        headers: HEADERS,
-        httpsAgent: agent
-      }
+      { headers: HEADERS, httpsAgent: agent }
     );
 
     return {
@@ -92,22 +91,22 @@ async function checkTask(id) {
 
 // --- Routes ---
 
-app.get("/", (req, res) => res.send("Vider AI Backend V3 (Fixed Payload)"));
+app.get("/", (req, res) => res.send("Vider AI Fix Integer"));
 
 app.post("/api/start", async (req, res) => {
   const { prompt } = req.body;
+  
   if (!prompt) return res.status(400).json({ error: "Prompt kosong" });
 
   try {
     const taskId = await createTask(prompt);
     
     if (!taskId) {
-      return res.status(502).json({ error: "Gagal mendapatkan respon dari Vider AI (Cek Logs untuk 403/Block)." });
+      return res.status(502).json({ error: "Gagal membuat task. Server Vider menolak payload." });
     }
 
     res.json({ success: true, taskId });
   } catch (error) {
-    console.error("Server Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
